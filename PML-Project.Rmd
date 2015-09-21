@@ -1,0 +1,136 @@
+---
+title: "Project Practical Machine Learning"
+author: "Doug Ortiz"
+date: "September 21, 2015"
+output: html_document
+---
+#Introduction
+This is the Coursera Practical Machine Learning Project.
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+#Required Packages
+```{r}
+setwd("C:/Users/Administrator/Desktop/Coursera/7 - Practical Machine Learning")
+getwd()
+#install.packages('rpart')
+#install.packages('rpart.plot')
+#install.packages('corrplot')
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+```
+
+#Download the Data
+Downloading the data to a 'data' subfolder
+
+```{r}
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists(trainFile)) {
+  #download.file(trainUrl, destfile=trainFile, method="curl")
+  download.file(trainUrl, destfile=trainFile)
+}
+if (!file.exists(testFile)) {
+  #download.file(testUrl, destfile=testFile, method="curl")
+  download.file(testUrl, destfile=testFile)  
+}
+```
+
+#Reading Data
+Read the files into 
+```{r}
+train <- read.csv("./data/pml-training.csv")
+test <- read.csv("./data//pml-testing.csv")
+dim(train)
+dim(test)
+```
+
+#Clean Data
+```{r}
+sum(complete.cases(train))
+```
+
+Removing missing values.
+```{r}
+train <- train[, colSums(is.na(train)) == 0] 
+test <- test[, colSums(is.na(test)) == 0] 
+```
+
+Removing other non-necessary columns.
+```{r}
+classe <- train$classe
+trainRemove <- grepl("^X|timestamp|window", names(train))
+train <- train[, !trainRemove]
+trainCleaned <- train[, sapply(train, is.numeric)]
+trainCleaned$classe <- classe
+testRemove <- grepl("^X|timestamp|window", names(test))
+test <- test[, !testRemove]
+testCleaned <- test[, sapply(test, is.numeric)]
+```
+
+Data has been cleaned.
+
+#Preparing training data set
+
+Creating a training dataset with 70% of data and validation with 30%
+```{r}
+set.seed(22519) # For reproducibile purpose
+inTrain <- createDataPartition(trainCleaned$classe, p=0.70, list=F)
+trainData <- trainCleaned[inTrain, ]
+validData <- trainCleaned[-inTrain, ]
+```
+
+#Predictive Modeling
+
+Utilizing Random Forest algorithm 
+```{r}
+controlRf <- trainControl(method="cv", 5)
+modelRf <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modelRf
+```
+
+Estimate performance of the model against validation data set.
+```{r}
+predictRf <- predict(modelRf, validData)
+confusionMatrix(validData$classe, predictRf)
+```
+
+```{r}
+accuracy <- postResample(predictRf, validData$classe)
+accuracy
+```
+
+```{r}
+se <- 1 - as.numeric(confusionMatrix(validData$classe, predictRf)$overall[1])
+se
+```
+
+Accuracy of model is 99.30% and out-of-sample error is .70%.
+
+#Predict
+```{r}
+result <- predict(modelRf, testCleaned[, -length(names(testCleaned))])
+result
+```
+
+#Figures
+
+##Correlation Matrix Visualization
+```{r}
+corrPlot <- cor(trainData[, -length(names(trainData))])
+corrplot(corrPlot, method="color")
+```
+
+##Decision Tree Visualization
+```{r}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel) # fast plot
+```
